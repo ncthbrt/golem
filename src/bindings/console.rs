@@ -42,7 +42,7 @@ fn console_error(
     args: v8::FunctionCallbackArguments,
     _rv: v8::ReturnValue,
 ) -> () {
-    eprint!("{}", to_console_string(scope, args));
+    eprintln!("{}", to_console_string(scope, args));
 }
 
 pub fn inject_console<'sc>(

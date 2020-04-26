@@ -8,6 +8,7 @@ const SOURCE_CODE: &str = "
     function main(state, msg, ctx) {
         console.log(\"Hello World!\", { size: 32 }, [{a: 1},2,3,4]);
         console.error(\"Something has gone wrong!!\", { size: 32 }, [{a: 1},2,3,4]);
+        fetch('google.com', { method: 'POST' });
         return state + msg;
     }
 ";
