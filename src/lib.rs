@@ -13,13 +13,11 @@ const SOURCE_CODE: &str = "
 ";
 
 pub fn run_v8() {
-    let platform = v8::new_default_platform();
+    let platform = v8::new_default_platform().unwrap();
     v8::V8::initialize_platform(platform);
     v8::V8::initialize();
 
-    let mut create_params = v8::Isolate::create_params();
-    create_params.set_array_buffer_allocator(v8::new_default_allocator());
-    let mut isolate = v8::Isolate::new(create_params);
+    let mut isolate = v8::Isolate::new(Default::default());
     let mut handle_scope = v8::HandleScope::new(&mut isolate);
     let scope = handle_scope.enter();
 

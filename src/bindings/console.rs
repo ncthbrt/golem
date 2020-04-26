@@ -1,6 +1,5 @@
 use crate::bindings::utils;
 use rusty_v8 as v8;
-use std::collections::HashMap;
 use std::convert::TryInto;
 
 fn to_console_string(
@@ -25,7 +24,6 @@ fn to_console_string(
                 .unwrap_or_else(|| v8::String::new(scope, "").unwrap());
             str_vec.push(string_value.to_rust_string_lossy(scope));
         }
-        // v8::Local:: obj.get_type();
     }
 
     str_vec.join(" ")
