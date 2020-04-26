@@ -12,3 +12,5 @@ actix-rt = "1.1.0"
 rusty_v8 = "0.4.0"
 serde = "1.0.106"
 serde_json = "1.0.51"
+reqwest = { version = "0.10.4", features = ["json"] }
+tokio = { version = "0.2.19", features = ["full"] }

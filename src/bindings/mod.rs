@@ -1,5 +1,6 @@
 use rusty_v8 as v8;
 mod console;
+mod fetch;
 mod utils;
 
 pub fn inject_bindings<'sc>(
@@ -8,4 +9,5 @@ pub fn inject_bindings<'sc>(
 ) {
     let global = context.global(scope);
     console::inject_console(scope, context, &global);
+    fetch::inject_fetch(scope, context, &global);
 }
