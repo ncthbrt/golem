@@ -1,6 +1,8 @@
-use rusty_v8::{self as v8};
+use rusty_v8 as v8;
 use std::convert::TryFrom;
 use std::println;
+use std::any::Any;
+use rusty_v8::Promise;
 
 mod bindings;
 
@@ -41,11 +43,13 @@ pub fn run_v8() {
     let arg2 = v8::Local::from(v8::Number::new(scope, 2.0));
     let result = main.call(scope, context, global, &[arg1, arg2]).unwrap();
 
-    let result = result.to_string(scope).unwrap();
-    println!("result: {}", result.to_rust_string_lossy(scope));
+    // let result = result.to_string(scope).unwrap();
+    // println!("result: {}", result.to_rust_string_lossy(scope));
 
-    if result.is_promise() {
-        println!("{}", "Result is promise");
+
+    if result.is_object() && (result.is_async_function() || result.is_promise()) {
+        println!("{}", "Result is async");
+
     } else {
         println!("{}", "not a promise");
     };

@@ -2,13 +2,14 @@ use crate::bindings::fetch::FetchArgs;
 use http::Method;
 use rusty_v8 as v8;
 use std::str::FromStr;
+use rusty_v8::{Scope, ToLocal};
 
 fn get_url<'s>(
-    scope: &mut v8::FunctionCallbackScope,
+    scope: &mut impl ToLocal<'s>,
     url: v8::Local<v8::Value>,
 ) -> Result<String, String> {
     if url.is_string() {
-        Result::Ok(url.to_string(*scope).unwrap().to_rust_string_lossy(*scope))
+        Result::Ok(url.to_string(scope).unwrap().to_rust_string_lossy(scope))
     } else {
         Result::Err(String::from("URL required as first argument"))
     }
@@ -37,7 +38,7 @@ fn decode_argarray<'a>(
 }
 
 pub fn decode_arguments<'a>(
-    scope: &mut v8::FunctionCallbackScope,
+    scope: &mut impl ToLocal<'a>,
     context: v8::Local<v8::Context>,
     args: v8::FunctionCallbackArguments,
 ) -> Result<FetchArgs, String> {
