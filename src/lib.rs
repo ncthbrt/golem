@@ -1,14 +1,12 @@
-use rusty_v8 as v8;
+use rusty_v8::{self as v8};
 use std::convert::TryFrom;
 use std::println;
 
 mod bindings;
 
 const SOURCE_CODE: &str = "
-    function main(state, msg, ctx) {
-        console.log(\"Hello World!\", { size: 32 }, [{a: 1},2,3,4]);
-        console.error(\"Something has gone wrong!!\", { size: 32 }, [{a: 1},2,3,4]);
-        fetch('google.com', { method: 'POST' });
+    async function main(state, msg, ctx) {
+        await fetch('http://httpbin.org/post', { method: 'POST' }).catch(console.error).then(console.log);
         return state + msg;
     }
 ";
@@ -29,7 +27,6 @@ pub fn run_v8() {
     bindings::inject_bindings(scope, &context);
 
     let code = v8::String::new(scope, SOURCE_CODE).unwrap();
-    println!("javascript code: {}", code.to_rust_string_lossy(scope));
     let mut script = v8::Script::compile(scope, context, code, None).unwrap();
     script.run(scope, context).unwrap();
     let global = context.global(scope);
@@ -46,6 +43,12 @@ pub fn run_v8() {
 
     let result = result.to_string(scope).unwrap();
     println!("result: {}", result.to_rust_string_lossy(scope));
+
+    if result.is_promise() {
+        println!("{}", "Result is promise");
+    } else {
+        println!("{}", "not a promise");
+    };
 }
 
 pub mod controllers;
