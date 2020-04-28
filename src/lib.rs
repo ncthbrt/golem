@@ -1,14 +1,18 @@
+#[macro_use]
+extern crate downcast_rs;
+
 use rusty_v8 as v8;
 use std::convert::TryFrom;
-use std::println;
-use std::any::Any;
-use rusty_v8::Promise;
 
+mod ops;
 mod bindings;
+mod isolate_core;
+mod resources;
+
 
 const SOURCE_CODE: &str = "
     async function main(state, msg, ctx) {
-        await fetch('http://httpbin.org/post', { method: 'POST' }).catch(console.error).then(console.log);
+        // await fetch('http://httpbin.org/post', { method: 'POST' }).catch(console.error).then(console.log);
         return state + msg;
     }
 ";
@@ -26,7 +30,7 @@ pub fn run_v8() {
     let mut context_scope = v8::ContextScope::new(scope, context);
     let scope = context_scope.enter();
 
-    bindings::inject_bindings(scope, &context);
+    // bindings::inject_bindings(scope, &context);
 
     let code = v8::String::new(scope, SOURCE_CODE).unwrap();
     let mut script = v8::Script::compile(scope, context, code, None).unwrap();
@@ -49,7 +53,6 @@ pub fn run_v8() {
 
     if result.is_object() && (result.is_async_function() || result.is_promise()) {
         println!("{}", "Result is async");
-
     } else {
         println!("{}", "not a promise");
     };
