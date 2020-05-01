@@ -2,9 +2,52 @@ use rusty_v8 as v8;
 use std::cell::Cell;
 use std::convert::TryFrom;
 use crate::isolate_core::{ZeroCopyBuf, IsolateCore};
-// mod console;
-// mod fetch;
-// mod utils;
+use v8::MapFnTo;
+
+lazy_static! {
+  pub static ref EXTERNAL_REFERENCES: v8::ExternalReferences =
+    v8::ExternalReferences::new(&[
+      v8::ExternalReference {
+        function: recv.map_fn_to()
+      },
+      v8::ExternalReference {
+        function: send.map_fn_to()
+      },
+      v8::ExternalReference {
+        function: encode.map_fn_to()
+      },
+      v8::ExternalReference {
+        function: decode.map_fn_to()
+      }
+    ]);
+}
+
+
+pub fn script_origin<'a>(
+    s: &mut impl v8::ToLocal<'a>,
+    resource_name: v8::Local<'a, v8::String>,
+) -> v8::ScriptOrigin<'a> {
+    let resource_line_offset = v8::Integer::new(s, 0);
+    let resource_column_offset = v8::Integer::new(s, 0);
+    let resource_is_shared_cross_origin = v8::Boolean::new(s, false);
+    let script_id = v8::Integer::new(s, 123);
+    let source_map_url = v8::String::new(s, "source_map_url").unwrap();
+    let resource_is_opaque = v8::Boolean::new(s, true);
+    let is_wasm = v8::Boolean::new(s, false);
+    let is_module = v8::Boolean::new(s, false);
+    v8::ScriptOrigin::new(
+        resource_name.into(),
+        resource_line_offset,
+        resource_column_offset,
+        resource_is_shared_cross_origin,
+        script_id,
+        source_map_url.into(),
+        resource_is_opaque,
+        is_wasm,
+        is_module,
+    )
+}
+
 
 pub fn inject_bindings<'sc>(
     scope: &mut impl v8::ToLocal<'sc>,
@@ -111,7 +154,7 @@ fn recv(
         unsafe { &mut *(scope.isolate().get_data(0) as *mut IsolateCore) };
 
     if !core_isolate.js_recv_cb.is_empty() {
-        let msg = v8::String::new(scope, "Deno.core.recv already called.").unwrap();
+        let msg = v8::String::new(scope, "Golem.core.recv already called.").unwrap();
         scope.isolate().throw_exception(msg.into());
         return;
     }
@@ -184,6 +227,45 @@ pub fn boxed_slice_to_uint8array<'sc>(
     let backing_store_shared = backing_store.make_shared();
     let ab = v8::ArrayBuffer::with_backing_store(scope, &backing_store_shared);
     v8::Uint8Array::new(ab, 0, buf_len).expect("Failed to create UintArray8")
+}
+
+
+pub extern "C" fn promise_reject_callback(message: v8::PromiseRejectMessage) {
+    let mut cbs = v8::CallbackScope::new(&message);
+    let mut hs = v8::HandleScope::new(cbs.enter());
+    let scope = hs.enter();
+
+    let core_isolate: &mut IsolateCore =
+        unsafe { &mut *(scope.isolate().get_data(0) as *mut IsolateCore) };
+
+    let context = core_isolate.global_context.get(scope).unwrap();
+    let mut cs = v8::ContextScope::new(scope, context);
+    let scope = cs.enter();
+
+    let promise = message.get_promise();
+    let promise_id = promise.get_identity_hash();
+
+    match message.get_event() {
+        v8::PromiseRejectEvent::PromiseRejectWithNoHandler => {
+            let error = message.get_value();
+            let mut error_global = v8::Global::<v8::Value>::new();
+            error_global.set(scope, error);
+            core_isolate
+                .pending_promise_exceptions
+                .insert(promise_id, error_global);
+        }
+        v8::PromiseRejectEvent::PromiseHandlerAddedAfterReject => {
+            if let Some(mut handle) =
+            core_isolate.pending_promise_exceptions.remove(&promise_id)
+            {
+                handle.reset(scope);
+            }
+        }
+        v8::PromiseRejectEvent::PromiseRejectAfterResolved => {}
+        v8::PromiseRejectEvent::PromiseResolveAfterResolved => {
+            // Should not warn. See #1272
+        }
+    };
 }
 
 pub fn initialize_context<'s>(

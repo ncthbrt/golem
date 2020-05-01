@@ -1,7 +1,7 @@
 // Copyright 2018-2020 the Deno authors. All rights reserved. MIT license.
 
 // Think of Resources as File Descriptors. They are integers that are allocated by
-// the privileged side of Deno to refer to various rust objects that need to be
+// the privileged side of Golem to refer to various rust objects that need to be
 // referenced between multiple ops. For example, network sockets are resources.
 // Resources may or may not correspond to a real operating system file
 // descriptor (hence the different name).
@@ -11,11 +11,11 @@ use downcast_rs::Downcast;
 use std::any::Any;
 use std::collections::HashMap;
 
-/// ResourceId is Deno's version of a file descriptor. ResourceId is also referred
+/// ResourceId is Golem's version of a file descriptor. ResourceId is also referred
 /// to as rid in the code base.
 pub type ResourceId = u32;
 
-/// These store Deno's file descriptors. These are not necessarily the operating
+/// These store Golem's file descriptors. These are not necessarily the operating
 /// system ones.
 type ResourceMap = HashMap<ResourceId, (String, Box<dyn Resource>)>;
 
@@ -86,7 +86,7 @@ impl ResourceTable {
     }
 }
 
-/// Abstract type representing resource in Deno.
+/// Abstract type representing resource in Golem.
 ///
 /// The only thing it does is implementing `Downcast` trait
 /// that allows to cast resource to concrete type in `TableResource::get`
