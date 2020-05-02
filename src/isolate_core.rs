@@ -35,7 +35,7 @@ use std::task::Context;
 use std::task::Poll;
 use crate::resources::ResourceTable;
 
-type PendingOpFuture = Pin<Box<dyn Future<Output = (OpId, Buf)>>>;
+type PendingOpFuture = Pin<Box<dyn Future<Output=(OpId, Buf)>>>;
 
 /// A ZeroCopyBuf encapsulates a slice that's been borrowed from a JavaScript
 /// ArrayBuffer object. JavaScript objects can normally be garbage collected,
@@ -345,11 +345,18 @@ impl IsolateCore {
     pub(crate) fn shared_init(&mut self) {
         if self.needs_init {
             self.needs_init = false;
+
+            http_request::init(self);
+
             js_check(
                 self.execute("shared_queue.js", include_str!("shared_queue.js")),
             );
             js_check(
-                self.execute("fetch.js", include_str!("fetch.js")),
+                self.execute("dispatch_json.js", include_str!("dispatch_json.js")),
+            );
+
+            js_check(
+                self.execute("http_request.js", include_str!("http_request.js")),
             );
             // Maybe execute the startup script.
             if let Some(s) = self.startup_script.take() {
@@ -1202,6 +1209,7 @@ impl ErrWithV8Handle {
 }
 
 unsafe impl Send for ErrWithV8Handle {}
+
 unsafe impl Sync for ErrWithV8Handle {}
 
 impl Error for ErrWithV8Handle {}

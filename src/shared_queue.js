@@ -52,9 +52,9 @@ SharedQueue Binary Layout
 
     function init() {
         const shared = Golem.core.shared;
-        assert(shared.byteLength > 0);
-        assert(sharedBytes == null);
-        assert(shared32 == null);
+        assert(shared.byteLength > 0, "Expected shared byteLength to be greater than zero");
+        assert(sharedBytes == null, "Expected sharedBytes to be nonnull");
+        assert(shared32 == null, "Expected shared32 to be nonnull");
         sharedBytes = new Uint8Array(shared);
         shared32 = new Int32Array(shared);
         asyncHandlers = [];
@@ -69,9 +69,9 @@ SharedQueue Binary Layout
         return JSON.parse(opsMapJson);
     }
 
-    function assert(cond) {
+    function assert(cond, msg) {
         if (!cond) {
-            throw Error("assert");
+            throw Error(msg ?? "Expected condition to be true");
         }
     }
 
@@ -133,8 +133,8 @@ SharedQueue Binary Layout
             return false;
         }
         setMeta(index, end, opId);
-        assert(alignedEnd % 4 === 0);
-        assert(end - off == buf.byteLength);
+        assert(alignedEnd % 4 === 0, "Expected to be aligned");
+        assert(end - off == buf.byteLength, "Expected to be aligned 2");
         sharedBytes.set(buf, off);
         shared32[INDEX_NUM_RECORDS] += 1;
         shared32[INDEX_HEAD] = alignedEnd;
@@ -145,7 +145,7 @@ SharedQueue Binary Layout
     function shift() {
         const i = shared32[INDEX_NUM_SHIFTED_OFF];
         if (size() == 0) {
-            assert(i == 0);
+            assert(i == 0, "Expected i to be zero");
             return null;
         }
 
@@ -158,15 +158,15 @@ SharedQueue Binary Layout
             reset();
         }
 
-        assert(off != null);
-        assert(end != null);
+        assert(off != null, "Expected off to be non null");
+        assert(end != null, "Expected end to be non null");
         const buf = sharedBytes.subarray(off, end);
         return [opId, buf];
     }
 
     function setAsyncHandler(opId, cb) {
         maybeInit();
-        assert(opId != null);
+        assert(opId != null, "Expected opId to be non-null");
         asyncHandlers[opId] = cb;
     }
 
@@ -175,12 +175,14 @@ SharedQueue Binary Layout
             // This is the overflow_response case of golem::Isolate::poll().
             asyncHandlers[opId](buf);
         } else {
+            console.log('open id', opId);
+
             while (true) {
                 const opIdBuf = shift();
                 if (opIdBuf == null) {
                     break;
                 }
-                assert(asyncHandlers[opIdBuf[0]] != null);
+                assert(asyncHandlers[opIdBuf[0]] != null, "Expected async handlers to be non null");
                 asyncHandlers[opIdBuf[0]](opIdBuf[1]);
             }
         }
@@ -205,7 +207,7 @@ SharedQueue Binary Layout
         ops,
     };
 
-    assert(window[GLOBAL_NAMESPACE] != null);
-    assert(window[GLOBAL_NAMESPACE][CORE_NAMESPACE] != null);
+    assert(window[GLOBAL_NAMESPACE] != null, "Expected global ns to be non null");
+    assert(window[GLOBAL_NAMESPACE][CORE_NAMESPACE] != null, "Expected global core ns to be non null");
     Object.assign(core, golemCore);
 })(this);

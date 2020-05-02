@@ -4,6 +4,9 @@ use std::convert::TryFrom;
 use crate::isolate_core::{ZeroCopyBuf, IsolateCore};
 use v8::MapFnTo;
 
+mod console;
+mod utils;
+
 lazy_static! {
   pub static ref EXTERNAL_REFERENCES: v8::ExternalReferences =
     v8::ExternalReferences::new(&[
@@ -47,17 +50,6 @@ pub fn script_origin<'a>(
         is_module,
     )
 }
-
-
-pub fn inject_bindings<'sc>(
-    scope: &mut impl v8::ToLocal<'sc>,
-    context: &v8::Local<'sc, v8::Context>,
-) {
-    let global = context.global(scope);
-    // console::inject_console(scope, context, &global);
-    // fetch::inject_fetch(scope, context, &global);
-}
-
 
 pub(crate) unsafe fn get_backing_store_slice(
     backing_store: &v8::SharedRef<v8::BackingStore>,
@@ -268,6 +260,30 @@ pub extern "C" fn promise_reject_callback(message: v8::PromiseRejectMessage) {
     };
 }
 
+
+fn shared_getter(
+    scope: v8::PropertyCallbackScope,
+    _name: v8::Local<v8::Name>,
+    _args: v8::PropertyCallbackArguments,
+    mut rv: v8::ReturnValue,
+) {
+    let isolate_core: &mut IsolateCore =
+        unsafe { &mut *(scope.isolate().get_data(0) as *mut IsolateCore) };
+
+    // Lazily initialize the persistent external ArrayBuffer.
+    if isolate_core.shared_ab.is_empty() {
+        let ab = v8::SharedArrayBuffer::with_backing_store(
+            scope,
+            isolate_core.shared.get_backing_store(),
+        );
+        isolate_core.shared_ab.set(scope, ab);
+    }
+
+    let shared_ab = isolate_core.shared_ab.get(scope).unwrap();
+    rv.set(shared_ab.into());
+}
+
+
 pub fn initialize_context<'s>(
     scope: &mut impl v8::ToLocal<'s>,
 ) -> v8::Local<'s, v8::Context> {
@@ -327,6 +343,14 @@ pub fn initialize_context<'s>(
         decode_val.into(),
     );
 
+    console::inject_console(scope, &context, &global);
+
+
+    core_val.set_accessor(
+        context,
+        v8::String::new(scope, "shared").unwrap().into(),
+        shared_getter,
+    );
 
     scope.escape(context)
 }
