@@ -12,9 +12,13 @@ extern crate serde_json;
 extern crate futures;
 
 use rusty_v8 as v8;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use crate::isolate_core::{StartupData, IsolateCore};
 use crate::any_error::ErrBox;
+use rusty_v8::{Promise, Local, ToLocal, InIsolate};
+use crate::promise_future_wrapper::PromiseFutureWrapper;
+use std::sync::{Arc, Mutex};
+use rusty_v8::scope::Entered;
 
 mod ops;
 mod bindings;
@@ -24,17 +28,18 @@ mod shared_queue;
 mod any_error;
 mod js_errors;
 mod golem_isolate;
+mod promise_future_wrapper;
 
 const SOURCE_CODE: &str = "
     async function main(state, msg, ctx) {
-        // await fetch('http://httpbin.org/post', { method: 'POST' }).catch(console.error).then(console.log);
         console.log('hello world');
         await http_request();
         return state + msg;
     }
 ";
 
-pub async fn run_v8() -> Result<(), ErrBox> {
+
+pub async fn run_v8() {
     let mut isolate = IsolateCore::new(StartupData::None, false);
     let result = isolate.execute("test.js", SOURCE_CODE);
     match result {
@@ -43,9 +48,11 @@ pub async fn run_v8() -> Result<(), ErrBox> {
     };
 
     let v8_isolate = isolate.v8_isolate.as_mut().unwrap();
+
     {
         let mut hs = v8::HandleScope::new(v8_isolate);
         let scope = hs.enter();
+
         let context = isolate.global_context.get(scope).unwrap();
         let mut cs = v8::ContextScope::new(scope, context);
         let scope = cs.enter();
@@ -63,13 +70,36 @@ pub async fn run_v8() -> Result<(), ErrBox> {
 
             let result = main.call(scope, context, this.into(), &[arg1, arg2]).unwrap();
             let result = result.to_string(scope).unwrap();
-            println!("result: {}", result.to_rust_string_lossy(scope));
+            let result = result.to_rust_string_lossy(scope);
+            println!("Result {}", result);
         } else {
             println!("{}", "No main function");
-        };
+        }
     }
-    isolate.await
 
+    isolate.await;
+    //
+    // {
+    //     let mut hs = v8::HandleScope::new(v8_isolate);
+    //     let scope = hs.enter();
+    //     let context = isolate.global_context.get(scope).unwrap();
+    //     let mut cs = v8::ContextScope::new(scope, context);
+    //     let scope = cs.enter();
+    //
+    //     let result = result.unwrap();
+    //     if result.is_promise() {
+    //         println!("{}", "Is promise");
+    //         let promise: Local<Promise> = result.try_into().unwrap();
+    //         let result = promise.result(scope);
+    //         let result = result.to_string(scope).unwrap();
+    //         let result = result.to_rust_string_lossy(scope);
+    //         println!("The result is {}", result);
+    //     } else {
+    //         let result = result.to_string(scope).unwrap();
+    //         let result = result.to_rust_string_lossy(scope);
+    //         println!("The result is {}", result);
+    //     }
+    // };
 }
 
 pub mod controllers;
