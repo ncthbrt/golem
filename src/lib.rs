@@ -93,10 +93,10 @@ pub async fn run_v8() {
 
 
             // result
-            let asyncIsolateRef = isolateRef.clone();
+            let async_isolate_ref = isolateRef.clone();
             async {
                 println!("Entered async func");
-                let isolate = asyncIsolateRef;
+                let isolate = async_isolate_ref;
                 let mut mutx = isolate.lock().unwrap();
                 println!("Got lock async func");
                 let mut isolate = &mut *mutx;

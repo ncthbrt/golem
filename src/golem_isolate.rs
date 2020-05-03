@@ -1,15 +1,24 @@
+use std::mem;
 use crate::isolate_core::{IsolateCore, StartupData};
 
 pub struct GolemIsolate {
-    isolate_core: Box<IsolateCore>
+    isolate_core: Option<Box<IsolateCore>>,
+    // main_handle:
 }
 
 impl GolemIsolate {
-    pub fn new() -> Self {
+    pub fn try_new() -> Option<Self> {
         let isolate = Self {
-            isolate_core: IsolateCore::new(StartupData::None, false),
+            isolate_core: Some(IsolateCore::new(StartupData::None, false)),
         };
 
-        isolate
+        Some(isolate)
+    }
+}
+
+impl Drop for GolemIsolate {
+    fn drop(&mut self) {
+        let isolate = self.isolate_core.take().unwrap();
+        drop(isolate);
     }
 }

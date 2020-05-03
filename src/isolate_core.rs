@@ -483,7 +483,7 @@ impl IsolateCore {
 }
 
 impl Future for IsolateCore {
-    type Output = Result<(), ()>;
+    type Output = Result<(), ErrBox>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
         let inner = self.get_mut();
@@ -573,7 +573,7 @@ fn async_op_response<'s>(
     maybe_buf: Option<(OpId, Box<[u8]>)>,
     js_recv_cb: &v8::Global<v8::Function>,
     js_error_create_fn: &JSErrorCreateFn,
-) -> Result<(), ()> {
+) -> Result<(), ErrBox> {
     let context = scope.get_current_context().unwrap();
     let global: v8::Local<v8::Value> = context.global(scope).into();
     let js_recv_cb = js_recv_cb
@@ -598,9 +598,7 @@ fn async_op_response<'s>(
     match tc.exception() {
         None => Ok(()),
         Some(exception) => {
-            // TODO NICK add back errors
-            // exception_to_err_result(scope, exception, js_error_create_fn)
-            Err(())
+            exception_to_err_result(scope, exception, js_error_create_fn)
         }
     }
 }
@@ -609,7 +607,7 @@ fn drain_macrotasks<'s>(
     scope: &mut impl v8::ToLocal<'s>,
     js_macrotask_cb: &v8::Global<v8::Function>,
     js_error_create_fn: &JSErrorCreateFn,
-) -> Result<(), ()> {
+) -> Result<(), ErrBox> {
     let context = scope.get_current_context().unwrap();
     let global: v8::Local<v8::Value> = context.global(scope).into();
     let js_macrotask_cb = js_macrotask_cb.get(scope);
@@ -628,9 +626,7 @@ fn drain_macrotasks<'s>(
         let is_done = js_macrotask_cb.call(scope, context, global, &[]);
 
         if let Some(exception) = tc.exception() {
-            // TODO NICK add back errors
-            return Err(())
-            // return exception_to_err_result(scope, exception, js_error_create_fn);
+            return exception_to_err_result(scope, exception, js_error_create_fn);
         }
 
         let is_done = is_done.unwrap();
@@ -697,13 +693,11 @@ fn check_promise_exceptions<'s>(
     scope: &mut impl v8::ToLocal<'s>,
     pending_promise_exceptions: &mut HashMap<i32, v8::Global<v8::Value>>,
     js_error_create_fn: &JSErrorCreateFn,
-) -> Result<(), ()> {
+) -> Result<(), ErrBox> {
     if let Some(&key) = pending_promise_exceptions.keys().next() {
         let handle = pending_promise_exceptions.remove(&key).unwrap();
         let exception = handle.get(scope).expect("empty error handle");
-        // TODO NICK add back proper errors
-        // exception_to_err_result(scope, exception, js_error_create_fn)
-        Err(())
+        exception_to_err_result(scope, exception, js_error_create_fn)
     } else {
         Ok(())
     }
