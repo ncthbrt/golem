@@ -22,6 +22,7 @@ impl<'sc> Future for PromiseFutureWrapper<'sc> {
     fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut promise = self.promise;
         let state = promise.state();
+
         println!("{}", "Polling promise resolution");
         match state {
             PromiseState::Pending => Poll::Pending,

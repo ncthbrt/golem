@@ -9,7 +9,7 @@ use crate::ops::op_error::OpError;
 struct HttpRequestArgs {}
 
 // Fn(&mut IsolateCore, Value, Option<ZeroCopyBuf>) -> Result<JsonOp, OpError>,
-fn http_request(isolate: &mut IsolateCore, args: Value, data: Option<ZeroCopyBuf>) -> Result<JsonOp, OpError> {
+fn http_request(isolate: &mut IsolateCore, args: Value, _data: Option<ZeroCopyBuf>) -> Result<JsonOp, OpError> {
     let future = async move {
         println!("{}", "Calling future");
         let json_res = json!({
@@ -19,7 +19,6 @@ fn http_request(isolate: &mut IsolateCore, args: Value, data: Option<ZeroCopyBuf
         });
         println!("{}", "Json Res");
         Ok(json_res)
-
     };
     Result::Ok(JsonOp::Async(future.boxed_local()))
 }

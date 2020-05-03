@@ -6,7 +6,7 @@ pub struct GolemIsolate {
 
 impl GolemIsolate {
     pub fn new() -> Self {
-        let mut isolate = Self {
+        let isolate = Self {
             isolate_core: IsolateCore::new(StartupData::None, false),
         };
 
