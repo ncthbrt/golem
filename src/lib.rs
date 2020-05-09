@@ -13,49 +13,55 @@ extern crate futures;
 
 use rusty_v8 as v8;
 use std::convert::{TryFrom, TryInto};
-use crate::isolate_core::{StartupData, IsolateCore, Script};
-use crate::any_error::ErrBox;
 use rusty_v8::{Promise, Local, ToLocal, InIsolate, Value, Global};
-use crate::promise_future_wrapper::PromiseFutureWrapper;
 use std::sync::{Arc, Mutex};
 use rusty_v8::scope::Entered;
 use downcast_rs::DowncastSync;
 use futures::{SinkExt, TryFutureExt};
 use crate::golem_isolate::GolemIsolate;
+use deno_core::Script;
 
-mod ops;
-mod bindings;
-mod isolate_core;
-mod resources;
-mod shared_queue;
-mod any_error;
-mod js_errors;
+// mod ops;
+// mod bindings;
+// mod isolate_core;
+// mod resources;
+// mod shared_queue;
+// mod any_error;
+// mod js_errors;
 mod golem_isolate;
-mod promise_future_wrapper;
+// mod promise_future_wrapper;
 
 const SOURCE_CODE: &str = "
     async function main(state, msg, ctx) {
-        console.log('hello world');
-        await http_request();
+        // console.log('hello world');
+        // await http_request();
         return state + msg;
     }
 ";
 
 
 pub fn run_v8() -> Result<(), golem_isolate::IsolateCreationError> {
-    // let mut isolateRef = Arc::new(Mutex::new(IsolateCore::new(StartupData::None, false)));
-    let script = Script {
-        source: SOURCE_CODE,
-        filename: "test.js",
-    };
-    let snapshot = GolemIsolate::try_create_snapshot(script)?;
-    println!("{}", "Created snapshot");
-
     {
-        let isolate = GolemIsolate::new(snapshot);
-        println!("{}", "Created golem isolate");
-    }
+        let script = Script {
+            source: SOURCE_CODE,
+            filename: "test.js",
+        };
 
+        println!("{}", "Pre created snapshot");
+        {
+            let snapshot = GolemIsolate::try_create_snapshot(script)?;
+            let snapshot = Box::new(snapshot);
+            println!("{}", "Created snapshot");
+
+            {
+                println!("{}", "Pre create isolate");
+                let isolate = GolemIsolate::new(&snapshot);
+
+                println!("{}", "Created golem isolate");
+            }
+            println!("{}", "Destroyed golem isolate");
+        }
+    }
 
     Ok(())
 
