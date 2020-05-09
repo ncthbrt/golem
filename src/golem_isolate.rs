@@ -68,7 +68,7 @@ impl GolemSnapshot {
 
 
 pub struct GolemIsolate {
-    core_isolate: Pin<Box<CoreIsolate>>,
+    core_isolate: Arc<Box<CoreIsolate>>,
     main_handle: Option<Global<Function>>,
     cache_handle: Option<Global<Function>>,
     snapshot: Option<GolemSnapshot>,
@@ -110,7 +110,7 @@ fn create_and_setup_isolate(startup_data: StartupData) -> Result<Box<CoreIsolate
 }
 
 impl GolemIsolate {
-    fn try_new(startup_data: StartupData) -> Result<Self, IsolateCreationError> {
+    fn try_new(startup_data: StartupData) -> Result<Pin<Box<Self>>, IsolateCreationError> {
         let (snapshot, startup_data) = match startup_data {
             StartupData::Snapshot(_) => {
                 Ok((None, startup_data))
@@ -203,13 +203,13 @@ impl GolemIsolate {
         core_isolate.execute("test.js", " ");
 
         let golem = Self {
-            core_isolate: Box::pin(*core_isolate),
+            core_isolate: Arc::new(core_isolate),
             main_handle,
             cache_handle,
             snapshot,
         };
 
-        Ok(golem)
+        Ok(Box::pin(golem))
     }
 
     pub fn try_create_snapshot(script: Script) -> Result<GolemSnapshot, IsolateCreationError> {
@@ -220,7 +220,7 @@ impl GolemIsolate {
         Ok(snapshot)
     }
 
-    pub fn new(snapshot: &GolemSnapshot) -> Self {
+    pub fn new(snapshot: &GolemSnapshot) -> Pin<Box<Self>> {
         let golem = Self::try_new(StartupData::Snapshot(snapshot));
         match golem {
             Ok(g) => g,
