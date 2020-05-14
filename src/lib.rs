@@ -20,16 +20,15 @@ use downcast_rs::DowncastSync;
 use futures::{SinkExt, TryFutureExt};
 use crate::golem_isolate::GolemIsolate;
 use deno_core::Script;
+use std::time::Instant;
 
-// mod ops;
-// mod bindings;
-// mod isolate_core;
-// mod resources;
-// mod shared_queue;
-// mod any_error;
-// mod js_errors;
+mod dispatch_json;
+mod dispatch_minimal;
+mod op_error;
 mod golem_isolate;
-// mod promise_future_wrapper;
+mod global_timer;
+mod state;
+mod ops;
 
 const SOURCE_CODE: &str = "
     function main(state, msg, ctx) {
@@ -39,36 +38,25 @@ const SOURCE_CODE: &str = "
     }
 ";
 
-
 pub async fn run_v8() -> Result<(), golem_isolate::IsolateCreationError> {
     let script = Script {
         source: SOURCE_CODE,
         filename: "test.js",
     };
 
-    println!("{}", "Pre created snapshot");
     let snapshot = GolemIsolate::try_create_snapshot(script)?;
-    // let snapshot = snapshot;
-    println!("{}", "Created snapshot");
 
-
-    println!("{}", "Pre create isolate");
-    // let cloned = snapshot.clone();
-    let mut isolate = GolemIsolate::new(snapshot);
-
-    println!("{}", "Created golem isolate");
-
-    isolate.invoke_main();
-    println!("{}", "Invoked main");
-    println!("{}", "Pre awaited isolate");
-
-
-    let core_isolate = isolate.core_isolate;
-    let result = core_isolate.await;
-    println!("{:?}", result);
-
-    println!("{}", "Awaited isolate");
-
+    let global_start_time = Instant::now();
+    for _ in 0..1000 {
+        let cloned = snapshot.clone();
+        let mut isolate = GolemIsolate::new(cloned);
+        isolate.invoke_main();
+        isolate.get_future().await;
+    }
+    let global_end_time = Instant::now();
+    let delta_time = global_end_time - global_start_time;
+    println!("Total Run Time: {}ms", delta_time.as_millis());
+    println!("Average Run Time: {} microsecs", delta_time.as_micros() / 1000);
 
     Ok(())
 }

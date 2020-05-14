@@ -4,7 +4,7 @@ use crate::golem_isolate::IsolateCreationError::{FailedToCompileCode, NoMain};
 use std::convert::TryFrom;
 use std::borrow::BorrowMut;
 use std::sync::{Arc, Mutex};
-use deno_core::{Script, Snapshot, CoreIsolate, ErrBox};
+use deno_core::{Script, Snapshot, CoreIsolate, ErrBox, ZeroCopyBuf, Op, OpId};
 use rusty_v8::{self as v8, Function, Global, Local, ContextScope, HandleScope, Value};
 use deno_core::Snapshot::{JustCreated, Static};
 use futures::io::IoSlice;
@@ -15,6 +15,7 @@ use actix_web::web::scope;
 use std::future::Future;
 use futures::task::{Context, Poll};
 use futures::{TryFuture, FutureExt, TryFutureExt};
+use std::io::Error;
 
 
 pub enum IsolateCreationError {
@@ -29,9 +30,19 @@ enum StartupData<'a> {
     Snapshot(&'a GolemSnapshot),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct GolemSnapshot {
     data: Vec<u8>
+}
+
+impl Clone for GolemSnapshot {
+    fn clone(&self) -> Self {
+        let mut data = vec![0; self.data.len()];
+        data.copy_from_slice(&self.data);
+        GolemSnapshot {
+            data
+        }
+    }
 }
 
 
@@ -63,7 +74,6 @@ impl GolemSnapshot {
 
     pub fn from_startup_data(startup_data: &rusty_v8::StartupData) -> Self {
         let slice: &[u8] = &*startup_data;
-        println!("Slice length {}", slice.len());
         let mut vec = vec![0; slice.len()];
         vec.clone_from_slice(&slice);
         Self::new(vec)
@@ -109,7 +119,6 @@ impl Invokeable for CoreIsolate {
         // let result: Global<Value> = v8::Global::new_from(scope, result);
 
         let str = result.to_string(scope).unwrap();
-        println!("Result is: {}", str.to_rust_string_lossy(scope));
 
         // Result::Ok(result)
     }
@@ -117,12 +126,72 @@ impl Invokeable for CoreIsolate {
 
 
 pub struct GolemIsolate {
-    pub core_isolate: CoreIsolate,
+    core_isolate: CoreIsolate,
     main_handle: Global<Function>,
     cache_handle: Option<Global<Function>>,
     snapshot: Option<GolemSnapshot>,
     state: Global<Value>,
 }
+
+// fn register_op<F>(
+//     &mut self,
+//     name: &'static str,
+//     handler: impl Fn(State, u32, Option<ZeroCopyBuf>) -> F + Copy + 'static,
+// ) where
+//     F: TryFuture,
+//     F::Ok: TryInto<i32>,
+//     <F::Ok as TryInto<i32>>::Error: Debug,
+// {
+//     let state = self.state.clone();
+//     let core_handler = move |_isolate: &mut CoreIsolate,
+//                              control_buf: &[u8],
+//                              zero_copy_buf: Option<ZeroCopyBuf>|
+//                              -> Op {
+//         let state = state.clone();
+//         let record = Record::from(control_buf);
+//         let is_sync = record.promise_id == 0;
+//         assert!(!is_sync);
+//
+//         let fut = async move {
+//             let op = handler(state, record.rid, zero_copy_buf);
+//             let result = op
+//                 .map_ok(|r| r.try_into().expect("op result does not fit in i32"))
+//                 .unwrap_or_else(|_| -1)
+//                 .await;
+//             RecordBuf::from(Record { result, ..record })[..].into()
+//         };
+//
+//         Op::Async(fut.boxed_local())
+//     };
+//
+//     self.core_isolate.register_op(name, core_handler);
+// }
+
+//
+// fn register_sync_op<F>(&mut self, name: &'static str, handler: F)
+//     where
+//         F: 'static + Fn(State, u32, Option<ZeroCopyBuf>) -> Result<u32, Error>,
+// {
+//     let state = self.state.clone();
+//     let core_handler = move |_isolate: &mut CoreIsolate,
+//                              control_buf: &[u8],
+//                              zero_copy_buf: Option<ZeroCopyBuf>|
+//                              -> Op {
+//         let state = state.clone();
+//         let record = Record::from(control_buf);
+//         let is_sync = record.promise_id == 0;
+//         assert!(is_sync);
+//
+//         let result: i32 = match handler(state, record.rid, zero_copy_buf) {
+//             Ok(r) => r as i32,
+//             Err(_) => -1,
+//         };
+//         let buf = RecordBuf::from(Record { result, ..record })[..].into();
+//         Op::Sync(buf)
+//     };
+//
+//     self.core_isolate.register_op(name, core_handler);
+// }
 
 
 // This is a local proof that an isolate was created with the provided code
@@ -141,9 +210,9 @@ fn create_and_setup_isolate(startup_data: StartupData) -> Result<Box<CoreIsolate
             (deno_core::StartupData::Snapshot(JustCreated(data)), None)
         }
     };
-    println!("{}", "Pre create final isolate");
+
     let mut core_isolate = CoreIsolate::new(core_startup_data, script.is_some());
-    println!("{}", "Post created final isolate");
+
 
     match script {
         Some(script) => {
@@ -173,7 +242,7 @@ impl GolemIsolate {
                 let mut core_isolate = create_and_setup_isolate(StartupData::Script(script))?;
                 let snapshot = core_isolate.snapshot();
                 let golem_snapshot = GolemSnapshot::from_startup_data(&snapshot);
-                println!("{}", "Created golem snapshot");
+
                 Ok((Some(golem_snapshot), StartupData::NativeSnapshot(snapshot)))
             }
         }?;
@@ -185,17 +254,14 @@ impl GolemIsolate {
             Some(x) => Ok(x),
             None => Err(NoMain)
         }?;
-        println!("{}", "Got the main handle: true");
 
 
         let cache_handle = Self::try_get_function_handle(&mut core_isolate, "cache");
 
-        println!("Got the cache handle: {}", cache_handle.is_some());
 
         let state: Global<Value> = {
             let mut v8_isolate = core_isolate.v8_isolate.as_mut().unwrap();
             assert!(!core_isolate.global_context.is_empty());
-            println!("{}", "Unwrapped the isolate");
 
 
             let mut hs = HandleScope::new(v8_isolate);
@@ -219,7 +285,7 @@ impl GolemIsolate {
     fn try_get_function_handle(core_isolate: &mut CoreIsolate, name: &str) -> Option<Global<Function>> {
         let mut v8_isolate = core_isolate.v8_isolate.as_mut().unwrap();
         assert!(!core_isolate.global_context.is_empty());
-        println!("{}", "Unwrapped the isolate");
+
 
         let mut hs = HandleScope::new(v8_isolate);
         let scope = hs.enter();
@@ -244,10 +310,9 @@ impl GolemIsolate {
     }
 
     pub fn try_create_snapshot(script: Script) -> Result<GolemSnapshot, IsolateCreationError> {
-        println!("{}", "Start try_create_snapshot");
         let mut golem = Self::try_new(StartupData::Script(script))?;
         let snapshot = golem.snapshot.take().unwrap();
-        println!("{}", "Returning snapshot from try_create_snapshot");
+
         Ok(snapshot)
     }
 
@@ -268,8 +333,23 @@ impl GolemIsolate {
         &self.core_isolate.invoke_function(&self.main_handle);
     }
 
-    pub async fn await_isolate(self) -> Result<(), ErrBox> {
+    pub async fn get_future(self) -> Result<(), ErrBox> {
         self.core_isolate.await
+    }
+
+
+    pub fn register_op<F>(&mut self, name: &str, handler: F) -> OpId
+        where
+            F: Fn(&mut CoreIsolate, &[u8], Option<ZeroCopyBuf>) -> Op + 'static
+    {
+        self.core_isolate.register_op(name, handler)
+    }
+
+    pub fn register_json_op<F>(&mut self, name: &str, handler: F) -> OpId
+        where
+            F: Fn(&mut CoreIsolate, &[u8], Option<ZeroCopyBuf>) -> Op + 'static
+    {
+        self.core_isolate.register_op(name, handler)
     }
 }
 
